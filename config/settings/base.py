@@ -73,16 +73,33 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "linkway"),
-        "USER": os.getenv("POSTGRES_USER", "linkway"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "linkway"),
-        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+DB_ENGINE = os.getenv("DB_ENGINE", "postgres").lower()
+
+if DB_ENGINE == "mysql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.getenv("MYSQL_DB", "linkway"),
+            "USER": os.getenv("MYSQL_USER", "linkway"),
+            "PASSWORD": os.getenv("MYSQL_PASSWORD", "linkway"),
+            "HOST": os.getenv("MYSQL_HOST", "localhost"),
+            "PORT": os.getenv("MYSQL_PORT", "3306"),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "linkway"),
+            "USER": os.getenv("POSTGRES_USER", "linkway"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "linkway"),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        }
+    }
 
 AUTH_USER_MODEL = "authentication.User"
 
