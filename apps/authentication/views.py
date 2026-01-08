@@ -23,31 +23,38 @@ class LoginView(APIView):
   permission_classes = [AllowAny]
 
   def post(self, request):
-    email = (request.data.get("email") or "").strip().lower()
-    password = request.data.get("password") or ""
-
-    if not email or not password:
-      return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
-
     try:
-      user = User.objects.get(email=email)
-    except User.DoesNotExist:
-      return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+      email = (request.data.get("email") or "").strip().lower()
+      password = request.data.get("password") or ""
 
-    if not user.check_password(password):
-      return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+      if not email or not password:
+        return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not user.is_active:
-      return Response({"detail": "User account is inactive."}, status=status.HTTP_403_FORBIDDEN)
+      try:
+        user = User.objects.get(email=email)
+      except User.DoesNotExist:
+        return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
-    refresh = RefreshToken.for_user(user)
-    return Response(
-      {
-        "refresh": str(refresh),
-        "access": str(refresh.access_token),
-      },
-      status=status.HTTP_200_OK,
-    )
+      if not user.check_password(password):
+        return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+      if not user.is_active:
+        return Response({"detail": "User account is inactive."}, status=status.HTTP_403_FORBIDDEN)
+
+      refresh = RefreshToken.for_user(user)
+      return Response(
+        {
+          "refresh": str(refresh),
+          "access": str(refresh.access_token),
+        },
+        status=status.HTTP_200_OK,
+      )
+    except Exception as exc:  # noqa: BLE001
+      # Avoid generic Django 500 page; surface error in JSON so we can see it
+      return Response(
+        {"detail": f"login-error: {exc.__class__.__name__}: {exc}"},
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+      )
 
 
 class MeView(generics.RetrieveUpdateAPIView):
