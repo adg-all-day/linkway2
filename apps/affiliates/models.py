@@ -1,6 +1,7 @@
 import uuid
 
 from django.db import models
+from django.utils.text import slugify
 
 
 class AffiliateLink(models.Model):
@@ -32,6 +33,43 @@ class AffiliateLink(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.unique_slug}"
+
+
+class Catalogue(models.Model):
+    """
+    A marketer-defined catalogue (bundle) of products they're promoting.
+
+    This is used for "package catalogues" – curated sets of affiliate products.
+    The "main catalogue" (all promoted products) is derived dynamically and
+    does not need a dedicated row.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    marketer = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.CASCADE,
+        related_name="catalogues",
+    )
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140, unique=True)
+    links = models.ManyToManyField(AffiliateLink, related_name="catalogues", blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.marketer.email})"
+
+    def generate_unique_slug(self) -> None:
+        base = slugify(self.name) or "catalogue"
+        candidate = base
+        idx = 1
+        while Catalogue.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+            idx += 1
+            candidate = f"{base}-{idx}"
+        self.slug = candidate
 
 
 class ClickTracking(models.Model):
@@ -101,4 +139,3 @@ class CookieConsent(models.Model):
     consent_given_at = models.DateTimeField(blank=True, null=True)
     consent_withdrawn_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-

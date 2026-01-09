@@ -10,10 +10,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.analytics.services import detect_fraud
+from apps.authentication.models import User
 from apps.products.models import Product
 
-from .models import AffiliateLink, ClickTracking
-from .serializers import AffiliateLinkSerializer, GenerateAffiliateLinkSerializer
+from .models import AffiliateLink, Catalogue, ClickTracking
+from .serializers import AffiliateLinkSerializer, CatalogueSerializer, GenerateAffiliateLinkSerializer
 from .services import create_or_update_attribution
 
 
@@ -36,6 +37,112 @@ class AffiliateLinkViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         link = serializer.save()
         return Response(AffiliateLinkSerializer(link).data, status=status.HTTP_201_CREATED)
+
+
+class CatalogueViewSet(viewsets.ModelViewSet):
+    """
+    Marketer-only CRUD for package catalogues plus public read-only
+    endpoints used by the shareable store pages.
+    """
+
+    queryset = Catalogue.objects.select_related("marketer").prefetch_related("links__product")
+    serializer_class = CatalogueSerializer
+    permission_classes = [IsMarketer]
+
+    def get_queryset(self):
+        if self.action in {"retrieve_public", "main"}:
+            return self.queryset.filter(is_active=True)
+        return self.queryset.filter(marketer=self.request.user, is_active=True)
+
+    def perform_destroy(self, instance: Catalogue):
+        instance.is_active = False
+        instance.save(update_fields=["is_active"])
+
+    @action(detail=True, methods=["get"], permission_classes=[permissions.AllowAny], url_path="public")
+    def retrieve_public(self, request: Request, pk: str | None = None) -> Response:
+        """
+        Public read-only endpoint returning the products in a package catalogue.
+        """
+        catalogue = self.get_object()
+        items = []
+        for link in catalogue.links.select_related("product").filter(
+            is_active=True,
+            product__is_active=True,
+        ):
+            product = link.product
+            first_image = None
+            if isinstance(product.images, list) and product.images:
+                first_image = product.images[0]
+            items.append(
+                {
+                    "product_id": str(product.id),
+                    "product_name": product.name,
+                    "price": str(product.price),
+                    "description": product.short_description or product.description,
+                    "image": first_image,
+                    "affiliate_url": link.full_url,
+                }
+            )
+
+        return Response(
+            {
+                "id": str(catalogue.id),
+                "slug": catalogue.slug,
+                "name": catalogue.name,
+                "marketer": {
+                    "id": str(catalogue.marketer.id),
+                    "name": catalogue.marketer.full_name,
+                },
+                "items": items,
+            }
+        )
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[permissions.AllowAny],
+        url_path=r"main/(?P<marketer_id>[^/.]+)",
+    )
+    def main(self, request: Request, marketer_id: str | None = None) -> Response:
+        """
+        Public main catalogue: all active products this marketer is promoting.
+        """
+        marketer = get_object_or_404(User, id=marketer_id, role="marketer", is_active=True)
+        links = (
+            AffiliateLink.objects.select_related("product")
+            .filter(marketer=marketer, is_active=True, product__is_active=True)
+            .order_by("-created_at")
+        )
+
+        items = []
+        for link in links:
+            product = link.product
+            first_image = None
+            if isinstance(product.images, list) and product.images:
+                first_image = product.images[0]
+            items.append(
+                {
+                    "product_id": str(product.id),
+                    "product_name": product.name,
+                    "price": str(product.price),
+                    "description": product.short_description or product.description,
+                    "image": first_image,
+                    "affiliate_url": link.full_url,
+                }
+            )
+
+        return Response(
+            {
+                "id": None,
+                "slug": None,
+                "name": "Main catalogue",
+                "marketer": {
+                    "id": str(marketer.id),
+                    "name": marketer.full_name,
+                },
+                "items": items,
+            }
+        )
 
 
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
