@@ -1,6 +1,7 @@
 import logging
+import traceback
 
-from rest_framework import permissions, status, views
+from rest_framework import permissions, serializers, status, views
 from rest_framework.response import Response
 
 from apps.authentication.permissions import IsMarketer
@@ -14,7 +15,8 @@ from .serializers import (
 )
 from .services import generate_marketing_content, generate_marketing_image
 
-logger = logging.getLogger(__name__)
+# Use the Django logger so messages go to the existing console handler.
+logger = logging.getLogger("django")
 
 
 class GenerateContentView(views.APIView):
@@ -71,10 +73,11 @@ class GenerateImageView(views.APIView):
     permission_classes = [permissions.IsAuthenticated, IsMarketer]
 
     def post(self, request, *args, **kwargs):
-        serializer = GenerateImageSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
         try:
+            serializer = GenerateImageSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data = serializer.validated_data
+
             result = generate_marketing_image(
                 marketer=request.user,
                 product_id=str(data["product_id"]),
@@ -83,11 +86,15 @@ class GenerateImageView(views.APIView):
                 marketer_notes=data.get("marketer_notes", ""),
                 use_product_image=data.get("use_product_image", True),
             )
+            return Response(result, status=status.HTTP_200_OK)
+        except serializers.ValidationError:
+            # Let DRF handle standard 400 validation responses.
+            raise
         except Exception:  # noqa: BLE001
             # Log full details for debugging, but keep response generic for users.
             logger.exception("AI image generation failed")
+            traceback.print_exc()
             return Response(
                 {"detail": "Service temporarily unavailable, we're working on it."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        return Response(result, status=status.HTTP_200_OK)
