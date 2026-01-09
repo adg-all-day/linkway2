@@ -10,6 +10,12 @@ from .services import generate_affiliate_link
 class AffiliateLinkSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_is_active = serializers.BooleanField(source="product.is_active", read_only=True)
+    product_price = serializers.DecimalField(
+        source="product.price",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
 
     class Meta:
         model = AffiliateLink
@@ -19,6 +25,7 @@ class AffiliateLinkSerializer(serializers.ModelSerializer):
             "product",
             "product_name",
             "product_is_active",
+            "product_price",
             "unique_slug",
             "full_url",
             "custom_alias",

@@ -2,6 +2,7 @@ from rest_framework import permissions, status, views
 from rest_framework.response import Response
 
 from apps.authentication.permissions import IsMarketer
+from apps.affiliates.models import AffiliateLink
 
 from .product_matcher import generate_product_recommendations
 from .serializers import (
@@ -19,6 +20,18 @@ class GenerateContentView(views.APIView):
         serializer = GenerateContentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        affiliate = (
+            AffiliateLink.objects.filter(
+                marketer=request.user,
+                product_id=data["product_id"],
+                is_active=True,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        affiliate_url = affiliate.full_url if affiliate else None
+
         try:
             result = generate_marketing_content(
                 marketer=request.user,
@@ -27,6 +40,7 @@ class GenerateContentView(views.APIView):
                 platform=data["platform"],
                 tone=data.get("tone", "professional"),
                 marketer_notes=data.get("marketer_notes", ""),
+                affiliate_link=affiliate_url,
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)

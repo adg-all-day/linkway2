@@ -28,6 +28,7 @@ def generate_marketing_content(
     platform: str,
     tone: str = "professional",
     marketer_notes: str = "",
+    affiliate_link: str | None = None,
 ) -> Dict[str, Any]:
     now = timezone.now()
     one_hour_ago = now - timedelta(hours=1)
@@ -84,6 +85,7 @@ def generate_marketing_content(
         content=generated_content,
         platform=platform,
         content_type=content_type,
+        affiliate_link=affiliate_link,
     )
 
     with transaction.atomic():
@@ -371,6 +373,25 @@ def get_system_prompt(content_type: str, platform: str) -> str:
     )
 
 
-def post_process_content(content: str, platform: str, content_type: str) -> str:
-    # For now, just strip whitespace; hook for future platform-specific tweaks.
-    return content.strip()
+def post_process_content(
+    content: str,
+    platform: str,  # noqa: ARG001
+    content_type: str,  # noqa: ARG001
+    affiliate_link: str | None = None,
+) -> str:
+    """
+    Final tweak to generated text before returning it to the client.
+
+    - Always trims whitespace.
+    - If an affiliate link is provided, replaces the {{AFFILIATE_LINK}} placeholder
+      with the real URL.
+    - If no link is available, removes the placeholder so the text is still usable.
+    """
+    text = content.strip()
+    placeholder = "{{AFFILIATE_LINK}}"
+    if placeholder in text:
+        if affiliate_link:
+            text = text.replace(placeholder, affiliate_link.strip())
+        else:
+            text = text.replace(placeholder, "").strip()
+    return text
