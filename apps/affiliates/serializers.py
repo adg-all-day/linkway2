@@ -75,13 +75,15 @@ class CatalogueSerializer(serializers.ModelSerializer):
     product_ids = serializers.ListField(
         child=serializers.UUIDField(),
         write_only=True,
+        required=False,
     )
     item_count = serializers.IntegerField(source="links.count", read_only=True)
+    products = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Catalogue
-        fields = ["id", "name", "slug", "item_count", "product_ids", "created_at"]
-        read_only_fields = ["id", "slug", "item_count", "created_at"]
+        fields = ["id", "name", "slug", "item_count", "products", "product_ids", "created_at"]
+        read_only_fields = ["id", "slug", "item_count", "products", "created_at"]
 
     def create(self, validated_data):
         request = self.context["request"]
@@ -108,6 +110,50 @@ class CatalogueSerializer(serializers.ModelSerializer):
 
         catalogue.links.set(links)
         return catalogue
+
+    def update(self, instance, validated_data):
+        request = self.context["request"]
+        marketer = request.user
+        product_ids = validated_data.pop("product_ids", None)
+
+        name = validated_data.get("name")
+        if name and name != instance.name:
+            instance.name = name
+            instance.generate_unique_slug()
+            instance.save(update_fields=["name", "slug"])
+
+        if product_ids is not None:
+            if not product_ids:
+                raise ValidationError({"product_ids": "Select at least one product for this catalogue."})
+            links = AffiliateLink.objects.filter(
+                marketer=marketer,
+                product_id__in=product_ids,
+                is_active=True,
+                product__is_active=True,
+            )
+            if links.count() != len(set(product_ids)):
+                raise ValidationError(
+                    {"product_ids": "One or more selected products are not being promoted by you or are inactive."}
+                )
+            instance.links.set(links)
+
+        return instance
+
+    def get_products(self, instance: Catalogue):
+        items = []
+        for link in instance.links.select_related("product").filter(
+            is_active=True,
+            product__is_active=True,
+        ):
+            product = link.product
+            items.append(
+                {
+                    "product_id": str(product.id),
+                    "product_name": product.name,
+                    "product_price": str(product.price),
+                }
+            )
+        return items
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
