@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
 
@@ -11,6 +13,8 @@ from .serializers import (
     ProductRecommendationSerializer,
 )
 from .services import generate_marketing_content, generate_marketing_image
+
+logger = logging.getLogger(__name__)
 
 
 class GenerateContentView(views.APIView):
@@ -80,8 +84,8 @@ class GenerateImageView(views.APIView):
                 use_product_image=data.get("use_product_image", True),
             )
         except Exception:  # noqa: BLE001
-            # Do not leak internal OpenAI/infra details to the client.
-            # Present a generic, user-friendly error instead.
+            # Log full details for debugging, but keep response generic for users.
+            logger.exception("AI image generation failed")
             return Response(
                 {"detail": "Service temporarily unavailable, we're working on it."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,

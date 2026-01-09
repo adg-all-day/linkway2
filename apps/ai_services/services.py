@@ -17,8 +17,15 @@ from .models import AIContentLog
 
 
 def _get_client() -> OpenAI:
-    # Relies on OPENAI_API_KEY env var configured globally.
-    return OpenAI()
+    """
+    Construct a shared OpenAI client.
+
+    Uses OPENAI_API_KEY from the environment and applies a sane default timeout
+    so long-running image/content generations do not block the request for too
+    long. The timeout can be tuned via OPENAI_TIMEOUT_SECONDS if needed.
+    """
+    timeout_s = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "25"))
+    return OpenAI(timeout=timeout_s)
 
 
 def generate_marketing_content(
