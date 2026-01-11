@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import Cart, CartItem, Order
+from .models import Cart, CartItem, CustomerOrder, Order
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -44,3 +44,35 @@ class CartSerializer(serializers.ModelSerializer):
         for item in obj.items.all():
             total += (item.unit_price or Decimal("0")) * item.quantity
         return total
+
+
+class CustomerOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomerOrder
+        fields = "__all__"
+        read_only_fields = [
+            "id",
+            "order_number",
+            "buyer",
+            "customer_email",
+            "subtotal",
+            "shipping_fee",
+            "tax_amount",
+            "total_amount",
+            "payment_status",
+            "payment_reference",
+            "paystack_reference",
+            "created_at",
+            "updated_at",
+            "paid_at",
+        ]
+
+
+class CheckoutInitSerializer(serializers.Serializer):
+    """
+    Input payload for starting a Paystack checkout from the current cart.
+    """
+
+    customer_name = serializers.CharField(required=False, allow_blank=True)
+    customer_phone = serializers.CharField(required=False, allow_blank=True)
+    shipping_address = serializers.JSONField()

@@ -204,3 +204,9 @@ else:
 CORS_ALLOW_ALL_ORIGINS = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Payments / external services
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
+PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY", "")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+LINKWAY_PUBLIC_BASE_URL = os.getenv("LINKWAY_PUBLIC_BASE_URL", "http://localhost:8000")

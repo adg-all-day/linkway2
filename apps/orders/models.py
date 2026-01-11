@@ -3,6 +3,50 @@ import uuid
 from django.db import models
 
 
+class CustomerOrder(models.Model):
+    """
+    Top-level customer checkout that groups one or more seller orders
+    created from a single cart + Paystack payment.
+    """
+
+    PAYMENT_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+        ("failed", "Failed"),
+        ("refunded", "Refunded"),
+        ("partially_refunded", "Partially Refunded"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order_number = models.CharField(max_length=20, unique=True)
+    buyer = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.CASCADE,
+        related_name="customer_orders",
+    )
+    customer_email = models.EmailField()
+    customer_name = models.CharField(max_length=255)
+    customer_phone = models.CharField(max_length=20)
+    shipping_address = models.JSONField()
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default="pending",
+    )
+    payment_reference = models.CharField(max_length=100, unique=True)
+    paystack_reference = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
+
+    def __str__(self) -> str:
+        return self.order_number
+
+
 class Order(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -32,6 +76,13 @@ class Order(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order_number = models.CharField(max_length=20, unique=True)
+    customer_order = models.ForeignKey(
+        CustomerOrder,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="orders",
+    )
     product = models.ForeignKey(
         "products.Product",
         on_delete=models.CASCADE,
