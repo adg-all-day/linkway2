@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -67,6 +68,58 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         order = serializer.save()
         detect_fraud("order", str(order.id))
+
+    @action(detail=True, methods=["post"], url_path="accept", permission_classes=[OrderPermission])
+    def accept(self, request, pk=None):
+        """
+        Seller confirms/accepts an order line for processing.
+        """
+        order = self.get_object()
+        # Only allow sellers to accept their own pending orders
+        if getattr(request.user, "role", None) != "seller" or order.seller_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status not in ("pending",):
+            return Response(
+                {"detail": "Order cannot be accepted in its current status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order.status = "processing"
+        order.updated_at = timezone.now()
+        order.save(update_fields=["status", "updated_at"])
+        serializer = self.get_serializer(order)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="reject", permission_classes=[OrderPermission])
+    def reject(self, request, pk=None):
+        """
+        Seller rejects an order line and provides a reason.
+        """
+        order = self.get_object()
+        if getattr(request.user, "role", None) != "seller" or order.seller_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status not in ("pending",):
+            return Response(
+                {"detail": "Order cannot be rejected in its current status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            return Response({"detail": "Rejection reason is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        now = timezone.now()
+        order.status = "cancelled"
+        order.refund_status = "requested"
+        order.refund_reason = reason
+        order.refund_requested_at = now
+        order.updated_at = now
+        order.save(update_fields=["status", "refund_status", "refund_reason", "refund_requested_at", "updated_at"])
+
+        serializer = self.get_serializer(order)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class CartView(APIView):
